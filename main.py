@@ -1,6 +1,7 @@
 import pygame as pg
 import ctypes as ct
 import math as m
+#import timeit (commented out functions were used for testing)
 
 pg.init()
 
@@ -24,7 +25,7 @@ GRAY: tuple[int] = (127, 127, 127)
 WHITE: tuple[int] = (255, 255, 255)
 display = pg.display.set_mode((1600,837), pg.RESIZABLE)
 pg.display.set_caption("Conway's Game of Life")
-window = pg.display.get_wm_info()['window']
+window = pg.display.get_wm_info()["window"]
 ct.windll.user32.ShowWindow(window, 3)
 pg.display.flip()
 
@@ -148,74 +149,39 @@ class Button:
             self.color = self.hoverColor
         else:
             self.color = self.initialColor
+#(used to be in a class)
+def addCell(cellPos: tuple[int], isLive: bool):
+    cells[cellPos] = [isLive,0]
 
-#Cell Classes:
-class Cell:
-    def __init__(self, cellPos: tuple[int], isLive: bool):
-        self.cellPos: tuple[int] = cellPos
-        self.isLive: bool = isLive
+def removeCell(cellPos: tuple[int]):
+    cells.pop(cellPos, 0)
 
-    def switchState(self):
-        self.isLive = not self.isLive
-
-    def getNumberOfLiveNeighboors(self, cells: list):
-        surroundingCells: list[tuple[int]] = [(self.cellPos[0] - 1, self.cellPos[1] + 1), (self.cellPos[0], self.cellPos[1] + 1), (self.cellPos[0] + 1, self.cellPos[1] + 1),
-                                              (self.cellPos[0] - 1, self.cellPos[1]), (self.cellPos[0] + 1, self.cellPos[1]),
-                                              (self.cellPos[0] - 1, self.cellPos[1] - 1), (self.cellPos[0], self.cellPos[1] - 1), (self.cellPos[0] + 1, self.cellPos[1] - 1)
-                                              ]
-        return sum(1 for cell in cells if cell.isLive and cell.cellPos in surroundingCells)
-
-class cellsWrapper:
-    def __init__(self):
-        self.cells: set[object] = set()
-
-    def addCell(self, cellPos: tuple[int], isLive: bool):
-        for cell in self.cells:
-            if cell.cellPos == cellPos:
-                break
-        else:
-            newCell = Cell(cellPos, isLive)
-            self.cells.add(newCell)
-
-    def removeCell(self, cellPos: tuple[int]):
-        tempSet: set[object] = set()
-        for cell in self.cells:
-            if cell.cellPos != cellPos:
-                tempSet.add(cell)
-        self.cells = tempSet
-
-    def optimizeCells(self):
-        for cell in self.cells:
-            if not cell.isLive:
-                if cell.getNumberOfLiveNeighboors(self.cells) == 0:
-                    self.removeCell(cell.cellPos)
-
-    def getImportantCells(self):
-        startingCells = self.cells.copy()
-        for cell in startingCells:
-            if cell.isLive:
-                for i in range(-1, 2, 1):
-                    for j in range(-1, 2, 1):
-                        self.addCell((cell.cellPos[0] + i, cell.cellPos[1] + j), False)
-    
-    def applyRules(self):
-        tempSet = set()
-        for cell in self.cells:
-            tempCell = Cell(cell.cellPos, cell.isLive)
-            if cell.getNumberOfLiveNeighboors(self.cells) == 3 or (cell.getNumberOfLiveNeighboors(self.cells) == 2 and cell.isLive):
-                tempCell.isLive = True
+def getImportantCells():
+    tempDict = cells.copy()
+    for cell in tempDict: 
+        surroundingCells: list = [(cell[0] - 1, cell[1] + 1), (cell[0], cell[1] + 1), (cell[0] + 1, cell[1] + 1),
+                                 (cell[0] - 1, cell[1]), (cell[0] + 1, cell[1]),
+                                 (cell[0] - 1, cell[1] - 1), (cell[0], cell[1] - 1), (cell[0] + 1, cell[1] - 1)
+                                 ]
+        for cellPos in surroundingCells:
+            if cellPos in tempDict:
+                cells[cell][1] += 1
             else:
-                tempCell.isLive = False
-            tempSet.add(tempCell)
-        self.cells = tempSet
+                cells.setdefault(cellPos, [False, 0])
+                cells[cellPos][1] += 1
 
-    def advanceGeneration(self):
-        self.getImportantCells()
-        self.applyRules()
-        self.optimizeCells()
-        for cell in self.cells:
-            if not cell.isLive:
-                self.removeCell(cell.cellPos)
+def applyRules():
+    global cells
+    tempDict = {}
+    for cellPos, cell in cells.items():
+        if (cell[1] == 3 or (cell[1] == 2 and cell[0])):
+            tempDict[cellPos] = [True, 0]
+    cells = tempDict.copy()
+
+def advanceGeneration():
+    getImportantCells()
+    applyRules()
+#end of "class"
 
 #Helper Class:
 class convert:
@@ -255,9 +221,9 @@ def isOnScreen(centerBasedPos: tuple[int], margin: int) -> bool:
 def rendergame():
     display.fill(BLACK)
     drawGrid(zoom)
-    for cell in cells.cells:
-        if cell.isLive:
-            drawCell(cell.cellPos, True)   
+    for cellPos, cell in cells.items():
+        if cell[0]:
+            drawCell(cellPos, True)   
     UI.drawElements()
     pg.display.flip()
 
@@ -291,24 +257,24 @@ def handleLeftClick(event):
     else:
         isCreatingCells = None
         if not isPaused:
-            previousCells = set()
+            previousCells = {}
             leftMouseHeld = True
             while leftMouseHeld:
                 selectedCell: tuple[int] = (convert.realPos.x(pg.mouse.get_pos()[0]), convert.realPos.y(pg.mouse.get_pos()[1]))
                 if selectedCell not in previousCells:
-                    if isCreatingCells != True and selectedCell in {cell.cellPos for cell in cells.cells}:
-                        cells.removeCell(selectedCell)
+                    if isCreatingCells != True and selectedCell in cells:
+                        removeCell(selectedCell)
                         drawCell(selectedCell, False)
                         UI.drawElements()
                         pg.display.flip()
                         isCreatingCells = False
                     elif isCreatingCells != False:
-                        cells.addCell(selectedCell, True)
+                        addCell(selectedCell, True)
                         drawCell(selectedCell, True)
                         UI.drawElements()
                         pg.display.flip()
                         isCreatingCells = True
-                    previousCells.add(selectedCell)
+                    previousCells.setdefault(selectedCell, [])
                 for Event in pg.event.get():
                     if Event.type == pg.MOUSEBUTTONUP and Event.button == 1:
                         leftMouseHeld = False
@@ -400,7 +366,7 @@ def quit():
     global running
     running = False
 
-cells = cellsWrapper()
+cells = {}
 UI = UIWrapper()
 
 menuRect = UI.addRect(30.0, 5.0, 40.0, 90.0, WHITE, False, 2)
@@ -422,6 +388,13 @@ darkModeButton = UI.addButton(37.5, 57.0, 25.0, 10.0, "Dark Mode", "freesansbold
 lightModeButton = UI.addButton(37.5, 69.0, 25.0, 10.0, "Light Mode", "freesansbold.ttf", 8.0, GRAY, BLACK, WHITE, False, True, 2, setLightMode)
 quitButton = UI.addButton(40.0, 83.0, 20.0, 10.0, "Quit", "freesansbold.ttf", 8.0, WHITE, BLACK, GRAY, False, True, 2, quit)
 
+#def tenKsquares():
+#    for i in range(1000):
+#        for j in range(1000):
+#            addCell((i, j), True)
+#
+#print(f"time taken to generate squares: {timeit.timeit(tenKsquares, number=1)}")
+
 running: bool = True
 while running:
     centerx, centery = m.floor(display.get_width() / 2), m.ceil(display.get_height() / 2) - 1 #cornerbased
@@ -436,7 +409,8 @@ while running:
             if event.key == pg.K_r:
                 origin = [0, 0]
             if event.key == pg.K_g:
-                cells.advanceGeneration()
+                advanceGeneration()
+                #print(f"time taken to update squares: {timeit.timeit(getImportantCells, number=1)} + {timeit.timeit(applyRules, number=1)}")
 
         if event.type == pg.MOUSEBUTTONDOWN:
             if event.button == 1:
